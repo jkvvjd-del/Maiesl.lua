@@ -374,15 +374,3 @@ RunService.Heartbeat:Connect(function(dt)
 		if sparkle and sparkle.Parent then sparkle.Color = ColorSequence.new(wingColor) end
 	end
 end)
-
-----------------------------------------------------------------
--- 5. Зачистка при смерти
-----------------------------------------------------------------
-humanoid.Died:Connect(function()
-	if wingsModel then wingsModel:Destroy() end
-	for _, obj in ipairs(torso:GetChildren()) do
-		if obj.Name:find("ShoulderAttach") or obj.Name:find("WingEndAttach") then
-			obj:Destroy()
-		end
-	end
-end)
