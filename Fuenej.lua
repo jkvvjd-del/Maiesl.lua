@@ -1,3 +1,4 @@
+local player = game:GetService("Players").LocalPlayer
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
@@ -120,6 +121,7 @@ player.CharacterAdded:Connect(function(newCharacter)
     task.wait(0.3)
     buildMathConeHat(newCharacter)
 end)
+and
 -- ============================================================================
 -- АВТОНОМНЫЙ БЛОК ЭФФЕКТОВ: ВСТАВИТЬ В САМЫЙ КОНЕЦ СКРИПТА
 -- ============================================================================
@@ -137,8 +139,8 @@ local function applyFlatEffects(char)
         if obj.Name == "HatTop" or obj.Name == "HatLeft_Trail" or obj.Name == "HatRight_Trail" then
             obj:Destroy()
         end
-    end
-
+	end
+	
     -- Создаем точки крепления ровно на уровне полей шляпы
     local HatLeftAttachment = Instance.new("Attachment")
     HatLeftAttachment.Name = "HatLeft_Trail"
@@ -373,4 +375,14 @@ RunService.Heartbeat:Connect(function(dt)
 	for _, sparkle in ipairs(wingEmitters) do
 		if sparkle and sparkle.Parent then sparkle.Color = ColorSequence.new(wingColor) end
 	end
+end)
+-- Моментальный запуск эффектов при старте скрипта
+if player.Character then
+    task.spawn(applyFlatEffects, player.Character)
+end
+
+-- Пересборка эффектов при каждом респавне
+player.CharacterAdded:Connect(function(newCharacter)
+    task.wait(0.3)
+    applyFlatEffects(newCharacter)
 end)
