@@ -237,3 +237,152 @@ player.CharacterAdded:Connect(function(newChar)
     task.wait(0.4) -- Ждем чуть дольше, чтобы шляпа успела построиться
     applyFlatEffects(newChar)
 end)
+-- =============================================================================
+-- ВАРИАНТ 1: ЭНЕРГЕТИЧЕСКИЕ КРЫЛЬЯ (Beam, слоями для объёма)
+-- =========================================================================----
+local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+
+local torsoName = character:FindFirstChild("UpperTorso") and "UpperTorso" or "Torso"
+local torso = character:WaitForChild(torsoName)
+
+----------------------------------------------------------------
+-- 1. Снос старого мусора
+----------------------------------------------------------------
+local function cleanupOld()
+	local old = character:FindFirstChild("EnergyWings")
+	if old then old:Destroy() end
+	for _, obj in ipairs(torso:GetChildren()) do
+		if obj.Name:find("ShoulderAttach") or obj.Name:find("WingEndAttach") then
+			obj:Destroy()
+		end
+	end
+end
+cleanupOld()
+
+local wingsModel = Instance.new("Model")
+wingsModel.Name = "EnergyWings"
+wingsModel.Parent = character
+
+----------------------------------------------------------------
+-- 2. Параметры
+----------------------------------------------------------------
+local FEATHER_COUNT = 6
+local BASE_LENGTH = 5.0
+local FAN_SPREAD = 55
+
+local activeBeams = {}      -- тонкие яркие "стержни"
+local glowBeams = {}        -- широкие полупрозрачные "подсветы"
+local wingEmitters = {}
+
+----------------------------------------------------------------
+-- 3. Сборка крыла
+----------------------------------------------------------------
+local function buildWing(side) -- 1 = правое, -1 = левое
+	local shoulderAttach = Instance.new("Attachment")
+	shoulderAttach.Name = "ShoulderAttach_" .. (side == 1 and "R" or "L")
+	shoulderAttach.Position = Vector3.new(side * 0.45, 0.45, 0.55)
+	shoulderAttach.Parent = torso
+
+	local angleStep = FAN_SPREAD / (FEATHER_COUNT - 1)
+
+	for i = 1, FEATHER_COUNT do
+		local currentAngleDeg = -20 + (i - 1) * angleStep
+		local rad = math.rad(currentAngleDeg)
+
+		local length = BASE_LENGTH * (0.85 + math.sin(math.rad((i / FEATHER_COUNT) * 180)) * 0.25)
+		if i == FEATHER_COUNT then length = BASE_LENGTH * 0.65 end
+
+		local endX = side * (math.cos(rad) * length)
+		local endY = math.sin(rad) * length + 0.5
+
+		local endAttach = Instance.new("Attachment")
+		endAttach.Name = "WingEndAttach_" .. (side == 1 and "R" or "L") .. "_" .. i
+		endAttach.Position = shoulderAttach.Position + Vector3.new(endX, endY, -0.1 * i)
+		endAttach.Parent = torso
+
+		-- ШИРОКИЙ ПОДСВЕТ (создаёт объём, "мясо" крыла)
+		local glow = Instance.new("Beam")
+		glow.Attachment0 = shoulderAttach
+		glow.Attachment1 = endAttach
+		glow.Texture = ""
+		glow.Segments = 10
+		glow.Width0 = 2.2 * (1 - (i - 1) * 0.06)
+		glow.Width1 = 0.6
+		glow.LightEmission = 0.4
+		glow.LightInfluence = 0
+		glow.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.75),
+			NumberSequenceKeypoint.new(1, 0.9),
+		})
+		glow.Parent = wingsModel
+		table.insert(glowBeams, glow)
+
+		-- ТОНКИЙ ЯРКИЙ СТЕРЖЕНЬ (даёт чёткость пера)
+		local core = Instance.new("Beam")
+		core.Attachment0 = shoulderAttach
+		core.Attachment1 = endAttach
+		core.Texture = ""
+		core.Segments = 10
+		core.Width0 = 0.5 * (1 - (i - 1) * 0.06)
+		core.Width1 = 0.05
+		core.LightEmission = 1
+		core.LightInfluence = 0
+		core.Transparency = NumberSequence.new(0.05)
+		core.Parent = wingsModel
+		table.insert(activeBeams, core)
+
+		local sparkle = Instance.new("ParticleEmitter")
+		sparkle.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		sparkle.Rate = 5
+		sparkle.Lifetime = NumberRange.new(0.3, 0.6)
+		sparkle.Speed = NumberRange.new(0.2, 0.5)
+		sparkle.Brightness = 8.0
+		sparkle.LightEmission = 0.85
+		sparkle.LightInfluence = 0
+		sparkle.Size = NumberSequence.new(0.22)
+		sparkle.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.2),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		sparkle.Parent = endAttach
+		table.insert(wingEmitters, sparkle)
+	end
+end
+
+buildWing(1)
+buildWing(-1)
+
+----------------------------------------------------------------
+-- 4. Радужная HSV-синхронизация
+----------------------------------------------------------------
+local hueTimer = 0
+
+RunService.Heartbeat:Connect(function(dt)
+	if not torso or not torso.Parent then return end
+
+	hueTimer = (hueTimer + dt * 0.45) % 1
+	local wingColor = Color3.fromHSV(hueTimer, 1, 1)
+
+	for _, beam in ipairs(activeBeams) do
+		if beam and beam.Parent then beam.Color = ColorSequence.new(wingColor) end
+	end
+	for _, glow in ipairs(glowBeams) do
+		if glow and glow.Parent then glow.Color = ColorSequence.new(wingColor) end
+	end
+	for _, sparkle in ipairs(wingEmitters) do
+		if sparkle and sparkle.Parent then sparkle.Color = ColorSequence.new(wingColor) end
+	end
+end)
+
+----------------------------------------------------------------
+-- 5. Зачистка при смерти
+----------------------------------------------------------------
+humanoid.Died:Connect(function()
+	if wingsModel then wingsModel:Destroy() end
+	for _, obj in ipairs(torso:GetChildren()) do
+		if obj.Name:find("ShoulderAttach") or obj.Name:find("WingEndAttach") then
+			obj:Destroy()
+		end
+	end
+end)
